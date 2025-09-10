@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prize Wheel</title>
+  <style>
+    body {
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      color: #fff;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background: linear-gradient(135deg,#222,#444);
+      transition: background 1s ease;
+      overflow: hidden;
+    }
+    h2 {
+      margin: 10px 0;
+      font-size: 24px;
+      font-weight: bold;
+    }
+    .pointer {
+      width: 0;
+      height: 0;
+      border-left: 14px solid transparent;
+      border-right: 14px solid transparent;
+      margin-bottom: -6px;
+      transition: border-top-color 0.6s;
+    }
+    #wheel {
+      border-radius: 50%;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      transition: transform 0.6s, opacity 0.6s;
+    }
+    button {
+      margin-top: 18px;
+      padding: 12px 28px;
+      border-radius: 12px;
+      border: none;
+      background: linear-gradient(135deg,#1e90ff,#0066ff);
+      color: white;
+      font-weight: bold;
+      font-size: 18px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      transition: transform 0.2s, box-shadow 0.3s;
+    }
+    button:hover {
+      transform: scale(1.05);
+      box-shadow: 0 6px 18px rgba(0,0,0,0.4);
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    #result {
+      margin-top: 14px;
+      font-size: 22px;
+      font-weight: bold;
+      min-height: 28px;
+    }
+    .fade-out {
+      opacity: 0;
+      transform: scale(0.85);
+    }
+    .fade-in {
+      opacity: 1;
+      transform: scale(1);
+    }
+    #levelup {
+      position: absolute;
+      top: 20%;
+      font-size: 48px;
+      font-weight: 900;
+      opacity: 0;
+      transform: scale(0.5);
+      pointer-events: none;
+      transition: all 0.8s ease;
+      text-shadow: 0 0 10px #fff, 0 0 20px #ff0;
+    }
+    #levelup.show {
+      opacity: 1;
+      transform: scale(1.4);
+    }
+    .plus {
+      color: #00c3ff;
+      text-shadow: 0 0 20px #00c3ff, 0 0 40px #00f;
+    }
+    .vip {
+      color: #ff00ff;
+      text-shadow: 0 0 25px #ff00ff, 0 0 50px #800080;
+    }
+    .ultra {
+      color: #ffd700;
+      text-shadow: 0 0 30px #ffd700, 0 0 60px #ff4500;
+    }
+    #rewardScreen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+      font-weight: bold;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.5s;
+    }
+    #rewardScreen.show {
+      opacity: 1;
+      pointer-events: all;
+    }
+    #rewardScreen button {
+      margin-top: 28px;
+      font-size: 20px;
+      background: linear-gradient(135deg,#ff5e62,#ff9966);
+    }
+    /* === Added: toggle switch styles (appended, nothing removed) === */
+    .switch { position: absolute; top: 20px; right: 20px; display: inline-block; width: 60px; height: 34px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #666; transition: .4s; border-radius: 34px; }
+    .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #2196F3; }
+    input:checked + .slider:before { transform: translateX(26px); }
+    .switch-label { position: absolute; top: 60px; right: 10px; font-size: 14px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2 id="level">BASIC</h2>
+  <!-- === Added: SUPER MODE toggle HTML (inserted, nothing removed) === -->
+  <label class="switch">
+    <input type="checkbox" id="superToggle">
+    <span class="slider"></span>
+  </label>
+  <div class="switch-label">SUPER MODE</div>
+  <div class="pointer" id="pointer"></div>
+  <canvas id="wheel" width="420" height="420"></canvas>
+  <button id="spinBtn">Quay</button>
+  <div id="result"></div>
+  <div id="levelup">THĂNG CẤP!</div>
+
+  <!-- Màn hình phần thưởng -->
+  <div id="rewardScreen">
+    <div id="rewardText"></div>
+    <button id="nextBtn">Quay tiếp</button>
+  </div>
+
+  <script>
+    const prizeLevels = [
+  // LEVEL 1 – PLUS (nạp thường)
+  [
+    { id:'advance', label:'PLUS',  weight:40 }, // cố định
+    { id:'0.10',    label:'0.10$', weight:35 }, // giải nhỏ phổ biến
+    { id:'0.20',    label:'0.20$', weight:15 },
+    { id:'0.30',    label:'0.30$', weight:9 },
+    { id:'0.50',    label:'0.50$', weight:1 }   // “mồi nhử” FOMO, xuất hiện nhưng siêu hiếm
+  ],
+  // LEVEL 2 – VIP
+  [
+    { id:'advance', label:'VIP',   weight:30 }, // cố định
+    { id:'0.20',    label:'0.20$', weight:25 },
+    { id:'0.30',    label:'0.30$', weight:14 },
+    { id:'0.40',    label:'0.40$', weight:10 },
+    { id:'0.50',    label:'0.50$', weight:21 }  // ≥60% tổng giải trị từ 0.40–0.50
+  ],
+  // LEVEL 3 – ULTRA
+  [
+    { id:'advance', label:'ULTRA', weight:20 }, // cố định
+    { id:'0.30',    label:'0.30$', weight:20 },
+    { id:'0.40',    label:'0.40$', weight:20 },
+    { id:'0.50',    label:'0.50$', weight:39 }, // chiếm gần 60%
+    { id:'0.80',    label:'0.80$', weight:1 }   // FOMO, xuất hiện cực hiếm nhưng tạo khao khát
+  ],
+  // LEVEL 4 – JACKPOT
+  [
+    { id:'jackpot', label:'JACKPOT 1.50$', weight:1 },   // siêu hiếm
+    { id:'0.50',    label:'0.50$',         weight:70 },  // nền tảng
+    { id:'0.80',    label:'0.80$',         weight:20 },
+    { id:'1.00',    label:'1.00$',         weight:9 }    // FOMO gần jackpot
+  ]
+];
+
+
+    const levelColors = [
+      ['#f9f9f9','#dcdcdc','#c0c0c0','#eeeeee'],
+      ['#a2d2ff','#70a9ff','#4682b4','#1e90ff'],
+      ['#d18aff','#a64dff','#800080','#c71585'],
+      ['#ffd700','#ff8c00','#ff4500','#ff0000']
+    ];
+
+    const pointerColors = ["#999","#1e90ff","#ff00ff","#ffd700"];
+
+    const levelBackgrounds = [
+      "linear-gradient(135deg,#333,#555)",
+      "linear-gradient(135deg,#001f3f,#003366)",
+      "linear-gradient(135deg,#2b0030,#4b0082)",
+      "linear-gradient(135deg,#331a00,#660000)"
+    ];
+
+    const levelNames = ["BASIC","PLUS","VIP","ULTRA"];
+
+    function dollarToPercent(label) {
+      if (label.includes("JACKPOT")) return "+150% JACKPOT";
+      if (label.includes("$")) {
+        const val = parseFloat(label.replace("$",""));
+        return "+" + Math.round(val*100) + "%";
+      }
+      return label;
+    }
+
+    function contrastTextColor(hex) {
+      hex = hex.replace("#","");
+      const r = parseInt(hex.substr(0,2),16),
+            g = parseInt(hex.substr(2,2),16),
+            b = parseInt(hex.substr(4,2),16);
+      const yiq = (r*299+g*587+b*114)/1000;
+      return yiq >= 128 ? "#000" : "#fff";
+    }
+
+    const canvas = document.getElementById("wheel");
+    const ctx = canvas.getContext("2d");
+    const R = canvas.width/2;
+    const btn = document.getElementById("spinBtn");
+    const res = document.getElementById("result");
+    const lvl = document.getElementById("level");
+    const lvlup = document.getElementById("levelup");
+    const pointer = document.getElementById("pointer");
+    const rewardScreen = document.getElementById("rewardScreen");
+    const rewardText = document.getElementById("rewardText");
+    const nextBtn = document.getElementById("nextBtn");
+
+    let angle = 0,
+        spinning = false,
+        level = 0,
+        highlight = null,
+        glowPhase = 0;
+
+    function drawWheel(){
+      const prizes = prizeLevels[level];
+      const arc = 2*Math.PI/prizes.length;
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+
+      ctx.save();
+      ctx.translate(R,R);
+      ctx.rotate(angle);
+      ctx.translate(-R,-R);
+
+      for(let i=0;i<prizes.length;i++){
+        const start = i*arc,
+              end = start+arc;
+        ctx.beginPath();
+        ctx.moveTo(R,R);
+        ctx.arc(R,R,R-4,start,end);
+        ctx.closePath();
+
+        const prize = prizes[i];
+        const color = levelColors[level][i%levelColors[level].length];
+        ctx.fillStyle = color;
+        ctx.fill();
+
+        if(highlight === i){
+          const glow = 20 + Math.sin(glowPhase)*10;
+          ctx.shadowColor = "#fff";
+          ctx.shadowBlur = glow;
+          ctx.fillStyle = "rgba(255,255,200,0.6)";
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.lineWidth = 4;
+          ctx.strokeStyle = "rgba(255,255,255,0.9)";
+          ctx.stroke();
+        }
+
+        ctx.save();
+        ctx.translate(R,R);
+        ctx.rotate(start+arc/2);
+        ctx.textAlign = "right";
+        const txt = dollarToPercent(prize.label);
+        ctx.font = (prize.id==="jackpot"||prize.id==="advance") ? "bold 18px Segoe UI" : "14px Segoe UI";
+        ctx.fillStyle = (prize.id==="jackpot"||prize.id==="advance") ? "#000" : contrastTextColor(color);
+        if(prize.id==="jackpot"||prize.id==="advance"){
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "#fff";
+          ctx.strokeText(txt,R-16,5);
+        }
+        ctx.fillText(txt,R-16,5);
+        ctx.restore();
+      }
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(R,R,48,0,2*Math.PI);
+      ctx.fillStyle = "#0a192f";
+      ctx.fill();
+    }
+
+    function weightedPick(prizes){
+      let t = prizes.reduce((s,p)=>s+p.weight,0);
+      let r = Math.random()*t;
+      for(let i=0;i<prizes.length;i++){
+        if(r<prizes[i].weight) return i;
+        r -= prizes[i].weight;
+      }
+      return prizes.length-1;
+    }
+
+    const easeOutCubic = t => 1-Math.pow(1-t,3);
+
+    function spin(){
+      if(spinning) return;
+      spinning = true;
+      btn.disabled = true;
+      res.textContent = "";
+      highlight = null;
+
+      const prizes = prizeLevels[level],
+            arc = 2*Math.PI/prizes.length;
+      const idx = weightedPick(prizes);
+      const slice = idx*arc+arc/2;
+      const extra = (6+Math.floor(Math.random()*2))*2*Math.PI;
+      const target = angle+extra+(2*Math.PI-((angle+slice+Math.PI/2)%(2*Math.PI)));
+      const start = angle,
+            delta = target-start,
+            dur = 5000,
+            startTime = performance.now();
+
+      function anim(now){
+        const t = (now-startTime)/dur;
+        if(t<1){
+          angle = start+easeOutCubic(t)*delta;
+          drawWheel();
+          requestAnimationFrame(anim);
+        }else{
+          angle = target%(2*Math.PI);
+          finish(idx);
+        }
+      }
+      requestAnimationFrame(anim);
+    }
+
+    function finish(idx){
+      highlight = idx;
+      glowPhase = 0;
+      const animateGlow = ()=>{
+        if(highlight !== null){
+          glowPhase += 0.25;
+          drawWheel();
+          requestAnimationFrame(animateGlow);
+        }
+      };
+      animateGlow();
+
+      const prize = prizeLevels[level][idx];
+      if(prize.id !== "advance"){
+        setTimeout(()=>{
+          showReward(dollarToPercent(prize.label));
+        },800);
+      }else{
+        setTimeout(()=>{
+          if(level<prizeLevels.length-1){
+            lvlup.textContent = "THĂNG CẤP!";
+            lvlup.className = "show "+levelNames[level+1].toLowerCase();
+            setTimeout(()=>{ lvlup.className = ""; },1500);
+            setTimeout(()=>{
+              level++;
+              lvl.textContent = levelNames[level];
+              document.body.style.background = levelBackgrounds[level];
+              pointer.style.borderTop = `26px solid ${pointerColors[level]}`;
+              angle = 0;
+              highlight = null;
+              canvas.classList.add("fade-out");
+              setTimeout(()=>{
+                canvas.classList.remove("fade-out");
+                canvas.classList.add("fade-in");
+                drawWheel();
+                setTimeout(()=>canvas.classList.remove("fade-in"),600);
+              },600);
+              spinning = false;
+              btn.disabled = false;
+            },1500);
+          }
+        },800);
+      }
+    }
+
+    function showReward(text){
+      let bg = "rgba(0,0,0,0.85)";
+      let rewardValue = 0;
+      if (text.includes("%")) {
+        rewardValue = parseInt(text.replace(/[^0-9]/g, "")) || 0;
+      }
+      if (text.includes("JACKPOT")) {
+        bg = "linear-gradient(135deg,#ff512f,#dd2476)";
+      } else if (rewardValue >= 100) {
+        bg = "linear-gradient(135deg,#ffb347,#ffcc33)";
+      } else if (rewardValue >= 50) {
+        bg = "linear-gradient(135deg,#36d1dc,#5b86e5)";
+      } else if (rewardValue >= 20) {
+        bg = "linear-gradient(135deg,#11998e,#38ef7d)";
+      } else {
+        bg = "linear-gradient(135deg,#bdc3c7,#2c3e50)";
+      }
+      rewardScreen.style.background = bg;
+      rewardText.textContent = "BẠN ĐÃ QUAY TRÚNG " + text;
+      rewardScreen.classList.add("show");
+
+      canvas.style.display = "none";
+      btn.style.display = "none";
+      pointer.style.display = "none";
+      lvl.style.display = "none";
+      res.textContent = "";
+      spinning = false;
+      btn.disabled = false;
+    }
+
+    nextBtn.addEventListener("click",()=>{
+      rewardScreen.classList.remove("show");
+      canvas.style.display = "block";
+      btn.style.display = "inline-block";
+      pointer.style.display = "block";
+      lvl.style.display = "block";
+      level = 0;
+      angle = 0;
+      highlight = null;
+      lvl.textContent = levelNames[level];
+      document.body.style.background = levelBackgrounds[level];
+      pointer.style.borderTop = `26px solid ${pointerColors[level]}`;
+      drawWheel();
+    });
+
+    btn.addEventListener("click",spin);
+    document.body.style.background = levelBackgrounds[0];
+    pointer.style.borderTop = `26px solid ${pointerColors[0]}`;
+    drawWheel();
+  </script>
+  <!-- === Added: second script that ONLY augments behavior (no deletion of your code) === -->
+  <script>
+    (function(){
+      // Keep a deep copy of your original $-based pool as SUPER mode
+      const superPrizeLevels = JSON.parse(JSON.stringify(prizeLevels));
+
+      // New default pool: snacks/drinks/% — labels chosen to avoid interfering with dollarToPercent
+      const defaultPrizeLevels = [
+        [
+          {id:'advance', label:'PLUS', weight:40},
+          {id:'snack',  label:'1 snack', weight:43.6},
+          {id:'drink',  label:'1 nước ngọt', weight:15.0},
+          {id:'combo',  label:'1 nước ngọt + 1 snack', weight:1.4}
+        ],
+        [
+          {id:'advance', label:'VIP', weight:30},
+          {id:'drink',  label:'1 nước ngọt', weight:50.0},
+          {id:'combo',  label:'1 nước ngọt + 1 snack', weight:11.0},
+          {id:'+20',    label:'+20%', weight:4.0},
+          {id:'+25',    label:'+25%', weight:5.0}
+        ],
+        [
+          {id:'advance', label:'ULTRA', weight:20},
+          {id:'+20',    label:'+20%', weight:32.0},
+          {id:'+25',    label:'+25%', weight:22.0},
+          {id:'+30',    label:'+30%', weight:23.0},
+          {id:'+35',    label:'+35%', weight:3.0}
+        ],
+        [
+          {id:'jackpot', label:'Jackpot +100%', weight:5.0},
+          {id:'+40',    label:'+40%', weight:25.0},
+          {id:'+30',    label:'+30%', weight:52.0},
+          {id:'+50',    label:'+50%', weight:18.0}
+        ]
+      ];
+
+      // Update backgrounds to "gà → xịn sò" without deleting your original definitions
+      levelBackgrounds[0] = "linear-gradient(135deg,#2c3e50,#bdc3c7)"; // BASIC (clean, newbie)
+      levelBackgrounds[1] = "linear-gradient(135deg,#000428,#004e92)"; // PLUS (electric blue)
+      levelBackgrounds[2] = "linear-gradient(135deg,#4a148c,#9c27b0)"; // VIP (neon purple)
+      levelBackgrounds[3] = "linear-gradient(135deg,#ff512f,#dd2476)"; // ULTRA (fiery premium)
+
+      const superToggle = document.getElementById('superToggle');
+
+      function setPool(sourceLevels){
+        // Mutate your const prizeLevels in-place so all original functions keep working
+        prizeLevels.splice(0, prizeLevels.length);
+        for(const lvlArr of sourceLevels){
+          prizeLevels.push(lvlArr.map(p => ({...p})));
+        }
+        // Reset visuals using your original transitions
+        level = 0; angle = 0; highlight = null;
+        lvl.textContent = levelNames[level];
+        document.body.style.background = levelBackgrounds[level];
+        pointer.style.borderTop = `26px solid ${pointerColors[level]}`;
+        canvas.classList.add("fade-out");
+        setTimeout(()=>{
+          canvas.classList.remove("fade-out");
+          canvas.classList.add("fade-in");
+          drawWheel();
+          setTimeout(()=>canvas.classList.remove("fade-in"),600);
+        },600);
+      }
+
+      // Start in DEFAULT mode (toggle OFF)
+      setPool(defaultPrizeLevels);
+
+      // Toggle behavior: ON => SUPER ($), OFF => default (snack/percent)
+      superToggle.addEventListener('change', (e)=>{
+        if(e.target.checked){ setPool(superPrizeLevels); }
+        else { setPool(defaultPrizeLevels); }
+      });
+    })();
+  </script>
+</body>
+</html>
